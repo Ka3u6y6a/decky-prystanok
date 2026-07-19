@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "description": "Decky plugin that shows localization badges and warns about russian-developed/published games in the Steam library (powered by prystanok.com.ua API)",
   "type": "module",
+  "packageManager": "pnpm@11.5.3",
   "scripts": {
     "build": "rollup -c",
     "watch": "rollup -c -w",

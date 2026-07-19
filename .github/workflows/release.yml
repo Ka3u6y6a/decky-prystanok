@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # version read from package.json "packageManager"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify tag matches package.json version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME (=$TAG) does not match package.json version $PKG. Bump the version first."
+            exit 1
+          fi
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test:ts
+      - run: pnpm run test:py
+      - run: pnpm build
+
+      - name: Package plugin zip
+        run: |
+          PLUGIN="Prystanok"
+          mkdir -p "out/$PLUGIN"
+          cp -r dist main.py py_modules plugin.json package.json LICENSE "out/$PLUGIN/"
+          cp README.en.md "out/$PLUGIN/README.md" # ship the English README as README.md
+          rm -rf "out/$PLUGIN/py_modules/__pycache__" "out/$PLUGIN/dist"/*.map
+          (cd out && zip -r "../$PLUGIN-$GITHUB_REF_NAME.zip" "$PLUGIN")
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Prystanok-*.zip
+          generate_release_notes: true

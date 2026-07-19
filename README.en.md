@@ -48,16 +48,6 @@ The Quick Access panel shows details for the running game, a game open in the st
 - **Surfaces** (capsules / game page / store) — toggled independently; per surface: position, size, offsets.
 - **Localization** — global toggle for the loc badge, detail level (text/voice, official/unofficial) and **which language to look for** (defaults to the Steam UI language).
 - The plugin's own label language also follows the Steam UI language (Ukrainian / English).
-- The **threat** badge can't be turned off (it's the point of the plugin) — it shows even on a disabled surface (the "russian game" level only).
-
-## How it works
-
-- The Python backend queries `prystanok.com.ua/api/games/steam` in batches of up to 100 games, caches responses on disk (7 days; not-in-db → 1 day) and respects the rate limit (backoff on HTTP 429).
-- **Official localization** is read offline from the local Steam cache (`appcache/appinfo.vdf`, v29 format) — fast, no rate limit, for every game and any language. Prystanok adds unofficial fan translations and threat data.
-- **The threat level** is computed client-side (the API exposes no ready-made level): `russian` — `Origin == Russian` in KULI **or** the game's developer (from `Metadata.Developers`) has a dev portfolio >50% russian; `suspect` — a vendor that's majority-russian overall (typically the publisher); `vendor` — russian games in the minority.
-- **The store** on Deck is a separate web tab; the backend injects badges via the CEF debugger (like CSS Loader).
-- Offline, the plugin serves cached data and stays out of the way.
-
 
 ## Credits
 
