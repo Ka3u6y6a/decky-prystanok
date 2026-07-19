@@ -1,0 +1,15 @@
+{
+  "name": "Prystanok",
+  "author": "ka3u6y6a",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": [
+      "ukraine",
+      "localization",
+      "library"
+    ],
+    "description": "Shows localization badges and warns about russian-developed/published games in your Steam library, powered by prystanok.com.ua API.",
+    "image": "https://raw.githubusercontent.com/Ka3u6y6a/decky-prystanok/main/assets/logo.png"
+  }
+}
