@@ -7,11 +7,13 @@ import QuickAccessContent from "./components/QuickAccessContent";
 import { resetGridBadges, startGridObserver, stopGridObserver } from "./lib/gridObserver";
 import { uiLang } from "./lib/i18n";
 import patchLibraryApp from "./lib/patchLibraryApp";
+import { patchLibraryTiles } from "./lib/libraryTilePatch";
 import { loadSettings, subscribe, updateSettings } from "./lib/settingsStore";
 import { detectSteamLang } from "./lib/steamLang";
 
 export default definePlugin(() => {
   const libraryAppPatch = patchLibraryApp();
+  const unpatchLibraryTiles = patchLibraryTiles();
 
   // re-render grid badges on position/size/visibility changes
   const unsubscribe = subscribe(() => resetGridBadges());
@@ -37,6 +39,7 @@ export default definePlugin(() => {
     icon: <FaShieldAlt />,
     onDismount() {
       unsubscribe();
+      unpatchLibraryTiles();
       stopGridObserver();
       routerHook.removePatch("/library/app/:appid", libraryAppPatch);
     },

@@ -2,9 +2,10 @@
 import { describe, expect, it } from "vitest";
 
 import { GameStatus } from "../src/api";
-import { badgesFor, parseAppId, parseFeaturedAppId } from "../src/lib/gridObserver";
+import { badgesFor, hasTileBadge, parseAppId, parseFeaturedAppId } from "../src/lib/gridObserver";
 import { CC, HAND, SHIELD, SPEAKER, TRIANGLE } from "../src/lib/iconPaths";
 import { WARN } from "../src/lib/badgeTokens";
+import { TILE_ATTR } from "../src/lib/chipStyle";
 
 function status(over: Partial<GameStatus>): GameStatus {
   return { appid: 1, found: true, ...over };
@@ -160,6 +161,54 @@ describe("badgesFor", () => {
 
   it("plain game → none", () => {
     expect(badgesFor(status({ loc: "none" }))).toEqual([]);
+  });
+});
+
+describe("hasTileBadge (React tile patch owns the capsule)", () => {
+  // Shape measured on device: root > cover > img, badge 1 level under root
+  // (nesting 1) or 2 levels via a wrapper (nesting 2, landscape home tiles).
+  function tile(badgeAppid?: number, nesting: 1 | 2 = 2) {
+    const root = document.createElement("div");
+    const cover = document.createElement("div");
+    const img = document.createElement("img");
+    cover.appendChild(img);
+    root.appendChild(cover);
+    if (badgeAppid !== undefined) {
+      const badge = document.createElement("div");
+      badge.setAttribute(TILE_ATTR, String(badgeAppid));
+      if (nesting === 1) {
+        root.appendChild(badge);
+      } else {
+        const inner = document.createElement("div");
+        inner.appendChild(badge);
+        root.appendChild(inner);
+      }
+    }
+    return { root, img };
+  }
+
+  it("sees a badge rendered directly under the tile root", () => {
+    expect(hasTileBadge(tile(10, 1).img, 10)).toBe(true);
+  });
+
+  it("sees a badge wrapped one level deeper (landscape home tiles double-badged before)", () => {
+    expect(hasTileBadge(tile(10, 2).img, 10)).toBe(true);
+  });
+
+  it("no tile badge → observer draws it", () => {
+    expect(hasTileBadge(tile().img, 10)).toBe(false);
+  });
+
+  it("ignores a badge for another game", () => {
+    expect(hasTileBadge(tile(20).img, 10)).toBe(false);
+  });
+
+  it("doesn't pick up a neighbouring tile's badge", () => {
+    const row = document.createElement("div");
+    const mine = tile();
+    const neighbour = tile(10); // same appid shown twice, only the neighbour badged
+    row.append(mine.root, neighbour.root);
+    expect(hasTileBadge(mine.img, 10)).toBe(false);
   });
 });
 

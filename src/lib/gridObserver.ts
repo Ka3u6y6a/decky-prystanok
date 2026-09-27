@@ -1,7 +1,8 @@
 /**
- * Library-grid overlays without React-tree patching: watch the gamepad-UI DOM
- * for capsule images, pull the appid from the artwork URL, batch-fetch statuses
- * and pin a badge on each capsule.
+ * Capsule overlays by watching the gamepad-UI DOM: pull the appid from the
+ * artwork URL, batch-fetch statuses, pin a badge on each capsule. Library tiles
+ * are drawn by libraryTilePatch when it finds Steam's tile component; this
+ * covers the rest (home rows, featured card) and is the fallback if it doesn't.
  *
  * Our JS runs in SharedJSContext (blank document); the real UI DOM lives in the
  * "SP Desktop_uid0" popup via g_PopupManager. The popup gets recreated on
@@ -12,13 +13,9 @@ import { GameStatus } from "../api";
 import { isBadgeableType } from "./appType";
 import { CC, HAND, IconPath, SHIELD, SPEAKER, TRIANGLE } from "./iconPaths";
 import { getMemoizedStatus, prefetchStatuses } from "../hooks/useGameStatus";
-import { alignItems, anchorStyle } from "./badgeStyle";
 import {
-  BADGE_BORDER,
-  BADGE_SHADOW,
   CRIT,
   CRIT_INK,
-  FLAG_GRADIENT,
   LANG_LOC_BG,
   LANG_LOC_INK,
   LOC_BORDER,
@@ -30,22 +27,19 @@ import {
   WARN,
   WARN_INK,
 } from "./badgeTokens";
+import {
+  Chip,
+  GLYPH_STYLE,
+  TILE_ATTR,
+  capsuleScale,
+  chipColumnStyle,
+  chipStyle,
+  flagStyle,
+  leadStyle,
+  threatIconPx,
+  typeIconPx,
+} from "./chipStyle";
 import { getCachedSettings } from "./settingsStore";
-
-interface Chip {
-  /** Threat chips are icon-only — text is too noisy over art. */
-  icon?: IconPath;
-  /** Trailing loc-type markers (CC = text, speaker = audio). */
-  icons?: IconPath[];
-  text?: string;
-  background: string;
-  color: string;
-  border?: string;
-  flag?: boolean;
-  /** Leading glyph (✓ on a non-UA loc chip), tinted by leadColor. */
-  lead?: string;
-  leadColor?: string;
-}
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -146,6 +140,20 @@ export function badgesFor(status: GameStatus, surfaceOn = true, showLoc = true):
   return chips;
 }
 
+/** True if the React tile patch already badged this capsule. On device the tile
+ * root is 2 levels above the art and the badge sits 1–2 levels below the root
+ * (landscape tiles wrap their children once more), so look at children and
+ * grandchildren of a few ancestors. Matching the appid and staying shallow keeps
+ * it from picking up a neighbouring tile. Exported for tests. */
+export function hasTileBadge(img: Element, appid: number, depth = 4): boolean {
+  const sel = `[${TILE_ATTR}="${appid}"]`;
+  let node = img.parentElement;
+  for (let i = 0; node && i < depth; i++, node = node.parentElement) {
+    if (node.querySelector(`:scope > ${sel}, :scope > * > ${sel}`)) return true;
+  }
+  return false;
+}
+
 function decorate(img: HTMLImageElement, status: GameStatus): void {
   const parent = img.parentElement;
   const doc = img.ownerDocument;
@@ -155,7 +163,7 @@ function decorate(img: HTMLImageElement, status: GameStatus): void {
   const badges = badgesFor(status, cfg.enabled, getCachedSettings().showLoc);
   if (!badges.length) return;
 
-  const scale = cfg.size / 32;
+  const scale = capsuleScale(cfg);
 
   const view = doc.defaultView ?? window;
   if (view.getComputedStyle(parent).position === "static") {
@@ -164,77 +172,40 @@ function decorate(img: HTMLImageElement, status: GameStatus): void {
 
   const container = doc.createElement("div");
   container.setAttribute(BADGE_ATTR, String(status.appid));
-  Object.assign(container.style, {
-    position: "absolute",
-    zIndex: "50",
-    display: "flex",
-    flexDirection: "column",
-    gap: `${2 * scale}px`,
-    alignItems: alignItems(cfg),
-    pointerEvents: "none",
-    ...anchorStyle(cfg),
-  } as Partial<CSSStyleDeclaration>);
+  Object.assign(container.style, chipColumnStyle(cfg, 50));
+
+  const mkSvg = (ic: IconPath, px: number) => {
+    const svg = doc.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", ic.viewBox);
+    svg.setAttribute("width", `${px}`);
+    svg.setAttribute("height", `${px}`);
+    svg.setAttribute("fill", "currentColor");
+    Object.assign(svg.style, GLYPH_STYLE);
+    const p = doc.createElementNS(SVG_NS, "path");
+    p.setAttribute("d", ic.path);
+    svg.appendChild(p);
+    return svg;
+  };
 
   for (const badge of badges) {
     const el = doc.createElement("div");
-    // Fixed height, width flows to content — keeps a stacked column aligned.
-    Object.assign(el.style, {
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: `${3 * scale}px`,
-      height: `${16 * scale}px`,
-      boxSizing: "border-box",
-      padding: `0 ${6 * scale}px`,
-      borderRadius: `${999}px`,
-      background: badge.background,
-      color: badge.color,
-      border: badge.border ?? BADGE_BORDER,
-      boxShadow: BADGE_SHADOW,
-      fontSize: `${10 * scale}px`,
-      fontWeight: "600",
-      letterSpacing: "0.02em",
-      lineHeight: "1",
-      whiteSpace: "nowrap",
-    } as Partial<CSSStyleDeclaration>);
-    const mkSvg = (ic: IconPath, px: number) => {
-      const svg = doc.createElementNS(SVG_NS, "svg");
-      svg.setAttribute("viewBox", ic.viewBox);
-      svg.setAttribute("width", `${px}`);
-      svg.setAttribute("height", `${px}`);
-      svg.setAttribute("fill", "currentColor");
-      svg.style.display = "block";
-      svg.style.flexShrink = "0";
-      const p = doc.createElementNS(SVG_NS, "path");
-      p.setAttribute("d", ic.path);
-      svg.appendChild(p);
-      return svg;
-    };
+    Object.assign(el.style, chipStyle(badge, scale));
     if (badge.icon) {
-      el.appendChild(mkSvg(badge.icon, 11 * scale));
+      el.appendChild(mkSvg(badge.icon, threatIconPx(scale)));
     } else {
       if (badge.lead) {
         const lead = doc.createElement("span");
         lead.textContent = badge.lead;
-        lead.style.flexShrink = "0";
-        lead.style.lineHeight = "1";
-        if (badge.leadColor) lead.style.color = badge.leadColor;
+        Object.assign(lead.style, leadStyle(badge));
         el.appendChild(lead);
       }
       if (badge.flag) {
         const flag = doc.createElement("span");
-        Object.assign(flag.style, {
-          width: `${7 * scale}px`,
-          height: `${7 * scale}px`,
-          borderRadius: "1px",
-          flexShrink: "0",
-          background: FLAG_GRADIENT,
-          boxShadow: "0 0 0 1px rgba(0,0,0,.3)",
-        } as Partial<CSSStyleDeclaration>);
+        Object.assign(flag.style, flagStyle(scale));
         el.appendChild(flag);
       }
       if (badge.text) el.appendChild(doc.createTextNode(badge.text));
-      if (badge.icons) for (const ic of badge.icons) el.appendChild(mkSvg(ic, 9 * scale));
+      if (badge.icons) for (const ic of badge.icons) el.appendChild(mkSvg(ic, typeIconPx(scale)));
     }
     container.appendChild(el);
   }
@@ -259,6 +230,11 @@ function scan(): void {
     const appid = appidFromImage(img);
     if (appid === undefined) continue;
     const existing = img.parentElement?.querySelector(`[${BADGE_ATTR}]`);
+    // the React tile patch owns this capsule — drop a badge we drew before it mounted
+    if (hasTileBadge(img, appid)) {
+      existing?.remove();
+      continue;
+    }
     if (existing && Number(existing.getAttribute(BADGE_ATTR)) === appid) continue;
     if (existing) existing.remove();
     const list = pending.get(appid) ?? [];

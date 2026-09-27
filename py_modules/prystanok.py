@@ -25,7 +25,7 @@ BATCH_LIMIT = 100
 CACHE_TTL = 7 * 24 * 3600  # found games
 MISSING_TTL = 24 * 3600  # appids not in the Prystanok DB
 RETRY_DELAYS = (2, 5, 10)  # seconds, on HTTP 429
-USER_AGENT = "decky-prystanok/0.0.1 (+https://github.com/dzhyvotchenko/decky-prystanok)"
+USER_AGENT = "decky-prystanok/0.1.0 (+https://github.com/Ka3u6y6a/decky-prystanok)"
 
 logger = logging.getLogger("decky-prystanok.prystanok")
 

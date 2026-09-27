@@ -3,9 +3,18 @@
 // last so callers can override size/colour/aria.
 import { ReactElement, SVGProps } from "react";
 
-import { CC, HAND, SHIELD, SPEAKER, TRIANGLE } from "../lib/iconPaths";
+import { CC, HAND, IconPath, SHIELD, SPEAKER, TRIANGLE } from "../lib/iconPaths";
 
 type IconProps = SVGProps<SVGSVGElement>;
+
+// for icons picked at runtime (badge chips), where a named component won't do
+export function PathIcon({ icon, ...props }: { icon: IconPath } & IconProps): ReactElement {
+  return (
+    <svg viewBox={icon.viewBox} width="1em" height="1em" fill="currentColor" aria-hidden="true" {...props}>
+      <path d={icon.path} />
+    </svg>
+  );
+}
 
 function make(viewBox: string, d: string) {
   return function Icon(props: IconProps): ReactElement {
