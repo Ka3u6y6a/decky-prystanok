@@ -53,6 +53,16 @@ SSL_CTX = _build_ssl_context()
 RUSSIAN_STORE_LINKS = {"vk", "vkplay", "odnoklassniki", "rutube", "dzen", "yandex"}
 
 
+def _useful(model):
+    # for an unknown appid the API sends a model full of nulls, not null itself:
+    # {"SteamAppId": 1, "KuliGame": null, "SteamGame": null, ...}
+    if not isinstance(model, dict):
+        return None
+    if not model.get("KuliGame") and not model.get("SteamGame"):
+        return None
+    return model
+
+
 def _split_flags(value):
     """'Official, Text, Audio' -> set of exact tokens, so 'SemiOfficial'
     never matches 'Official'."""
@@ -185,7 +195,7 @@ class PrystanokClient:
         try:
             with open(self.cache_path, "r", encoding="utf-8") as f:
                 stored = json.load(f)
-            self._cache = {int(k): v for k, v in stored.items()}
+            self._cache = {int(k): {"t": v.get("t", 0), "d": _useful(v.get("d"))} for k, v in stored.items()}
             self.log.info("prystanok cache loaded: %d entries", len(self._cache))
         except FileNotFoundError:
             self._cache = {}
@@ -295,7 +305,7 @@ class PrystanokClient:
                     if batch_result is None:
                         continue
                     for appid, model in batch_result.items():
-                        self._cache[appid] = {"t": now, "d": model}
+                        self._cache[appid] = {"t": now, "d": _useful(model)}
                     fetched_any = True
                 if fetched_any:
                     self._save_disk_cache()

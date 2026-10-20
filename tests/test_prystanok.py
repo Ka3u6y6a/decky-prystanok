@@ -379,6 +379,23 @@ class TestClient(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(r[999])
         self.assertEqual(len(http.calls), 1)
 
+    async def test_unknown_appid_real_api_shape_uses_missing_ttl(self):
+        # the live API doesn't omit unknown ids, it returns a model full of nulls
+        empty = {"SteamAppId": 999, "KuliGame": None, "SteamGame": None,
+                 "SteamCuratorReviews": [], "SteamBloodyGame": None, "GogGame": None}
+        c = self._client()
+        with patch.object(c, "_http_get", make_http({999: empty})):
+            r = await c.get_games([999])
+        self.assertIsNone(r[999])
+        c._cache[999]["t"] = time.time() - prystanok.MISSING_TTL - 10
+        self.assertIsNone(c._fresh(999))  # expires after a day, not a week
+
+    async def test_old_disk_cache_with_empty_models_normalized(self):
+        with open(self.cache_path, "w") as f:
+            json.dump({"5": {"t": time.time(), "d": {"SteamAppId": 5, "KuliGame": None, "SteamGame": None}}}, f)
+        c = self._client()
+        self.assertIsNone(c._cache[5]["d"])
+
     async def test_disk_persistence_across_instances(self):
         c1 = self._client()
         with patch.object(c1, "_http_get", make_http({1: UA_OFFICIAL_AUDIO})):
